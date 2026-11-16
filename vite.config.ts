@@ -1,0 +1,17 @@
+import react from '@vitejs/plugin-react';
+import { fileURLToPath, URL } from 'node:url';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  envDir: fileURLToPath(new URL('..', import.meta.url)),
+  plugins: [react()],
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
+  server: {
+    port: 5173,
+    proxy: {
+      '/api': { target: 'http://localhost:4000', changeOrigin: true },
+    },
+  },
+});

@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f7f7f7;
+  --card: #ffffff;
+  --ink: #111111;
+  --secondary: #737373;
+  --muted: #a3a3a3;
+  --line: #e5e5e5;
+  --tint: #f4fae9;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #111111;
+  --card: #171717;
+  --ink: #ffffff;
+  --secondary: #a3a3a3;
+  --muted: #737373;
+  --line: #303030;
+  --tint: rgba(146, 230, 34, 0.08);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { min-height: 100%; min-height: 100dvh; width: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Manrope, "Segoe UI", sans-serif;
+  font-feature-settings: "ss01" on, "cv11" on;
+  overflow-x: hidden;
+}
+
+@media (max-width: 767px) {
+  .responsive-table { min-width: 0; }
+  .responsive-table thead { display: none; }
+  .responsive-table tbody tr {
+    display: grid;
+    gap: 0.45rem;
+    padding: 0.95rem 1rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .responsive-table tbody td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border: 0;
+    padding: 0;
+    text-align: right;
+  }
+  .responsive-table tbody td::before {
+    content: attr(data-label);
+    flex: 0 0 42%;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--secondary);
+  }
+  .responsive-table tbody td[data-label=""] {
+    justify-content: stretch;
+    flex-wrap: wrap;
+    padding-top: 0.35rem;
+  }
+  .responsive-table tbody td[data-label=""]::before { content: none; }
+  .responsive-table tbody td[data-label=""] > * { width: 100%; }
+  .responsive-table tbody td[data-label=""] .flex { width: 100%; }
+  .responsive-table tbody td[data-label=""] button,
+  .responsive-table tbody td[data-label=""] a {
+    flex: 1 1 8rem;
+    min-height: 2.75rem;
+    justify-content: center;
+  }
+}
+
+button, input, select, textarea { font: inherit; color: inherit; max-width: 100%; }
+input, select, textarea { min-width: 0; }
+
+::selection { background: #111111; color: #ffffff; }
+.dark ::selection { background: #92e622; color: #111111; }
+
+.tabular { font-variant-numeric: tabular-nums; }
+
+@media print {
+  aside, header, .no-print { display: none !important; }
+  main { padding: 0 !important; }
+  body { background: white; }
+}
