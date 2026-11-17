@@ -107,7 +107,7 @@ function MoneyRegister({ kind, title, text, endpoint, categories }: { kind: 'inc
       title: values.title,
       amount: values.amount,
       date: values.date,
-      category: kind === 'income' ? (categories.includes(editing?.category) ? editing.category : (categories[0] || 'Client Payments')) : (values.category || categories[0]),
+      category: kind === 'income' ? (editing && categories.includes(editing.category) ? editing.category : (categories[0] || 'Client Payments')) : (values.category || categories[0]),
       paymentMethod: editing?.paymentMethod === 'bank_transfer' ? 'bank_transfer' : 'cash',
       description: '',
     };
