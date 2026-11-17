@@ -6,6 +6,7 @@ import { useAuth, useToast } from '@/context';
 import { api, errorMessage, idempotencyKey } from '@/lib/api';
 import { inr, percentLabel, PRESETS, periodRange, monthRange, statusTone, titleCase, todayKey } from '@/lib/format';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/lib/labels';
+import { PersonalSummaryCards, type PersonalTotals } from '@/pages/personal';
 
 type Row = Record<string, any>;
 
@@ -14,7 +15,7 @@ export function IncomePage() {
 }
 
 export function ExpensesPage() {
-  return <MoneyRegister kind="expense" title="Expenses" text="Company Cash and bank accounts are the company money. Sajeel, Shakeeb, and Ismail each have a personal account. A personal expense stays on that card and does not change Company Cash." endpoint="/expenses" categories={EXPENSE_CATEGORIES} />;
+  return <MoneyRegister kind="expense" title="Expenses" text="Company Cash is company money. If Sajeel, Shakeeb, or Ismail pays from their own pocket, the company owes that person the same amount." endpoint="/expenses" categories={EXPENSE_CATEGORIES} />;
 }
 
 function MoneyRegister({ kind, title, text, endpoint, categories }: { kind: 'income' | 'expense'; title: string; text: string; endpoint: string; categories: string[] }) {
@@ -27,6 +28,7 @@ function MoneyRegister({ kind, title, text, endpoint, categories }: { kind: 'inc
   const [editing, setEditing] = useState<Row | null>(null);
   const [error, setError] = useState('');
   const [founderFilter, setFounderFilter] = useState('');
+  const [personalTotals, setPersonalTotals] = useState<Record<string, PersonalTotals>>({});
   const [preset, setPreset] = useState('this_month');
   const [day, setDay] = useState('');
   const [month, setMonth] = useState('');
@@ -54,7 +56,10 @@ function MoneyRegister({ kind, title, text, endpoint, categories }: { kind: 'inc
       setRows(data);
       setTotal(response.data.meta?.amountPaise || 0);
     }).catch((err) => setError(errorMessage(err)));
-    if (kind === 'expense') api.get('/founders', { params: { limit: 20 } }).then((response) => setFounders(response.data.data || [])).catch(() => undefined);
+    if (kind === 'expense') {
+      api.get('/founders', { params: { limit: 20 } }).then((response) => setFounders(response.data.data || [])).catch(() => undefined);
+      api.get('/personal').then((response) => setPersonalTotals(response.data.totals || {})).catch(() => undefined);
+    }
   };
 
   useEffect(() => { load(); }, [range?.from, range?.to, category]);
@@ -102,7 +107,7 @@ function MoneyRegister({ kind, title, text, endpoint, categories }: { kind: 'inc
       title: values.title,
       amount: values.amount,
       date: values.date,
-      category: kind === 'income' ? (categories[0] || 'Client Payments') : (values.category || categories[0]),
+      category: kind === 'income' ? (categories.includes(editing?.category) ? editing.category : (categories[0] || 'Client Payments')) : (values.category || categories[0]),
       paymentMethod: editing?.paymentMethod === 'bank_transfer' ? 'bank_transfer' : 'cash',
       description: '',
     };
@@ -124,8 +129,9 @@ function MoneyRegister({ kind, title, text, endpoint, categories }: { kind: 'inc
         payload.bankAccountId = editing.bankAccountId._id;
       }
     }
-    if (kind === 'income' && editing?.paymentMethod === 'bank_transfer' && editing.bankAccountId?._id) {
+    if (kind === 'income' && editing?.bankAccountId?._id) {
       payload.bankAccountId = editing.bankAccountId._id;
+      payload.paymentMethod = editing.paymentMethod === 'bank_transfer' ? 'bank_transfer' : 'cash';
     }
     try {
       if (editing) {
@@ -147,24 +153,7 @@ function MoneyRegister({ kind, title, text, endpoint, categories }: { kind: 'inc
     <div>
       <PageHeader title={title} text={text} action={can(`${kind === 'income' ? 'income' : 'expenses'}.manage`) && <Button onClick={openNew}>Add {kind}</Button>} />
       <div className="mb-4 space-y-3">
-        {kind === 'expense' && (
-          <div className="grid gap-3 md:grid-cols-3">
-            {founderAccounts.map((founder) => {
-              const selected = founderFilter === founder._id;
-              return (
-                <button key={founder._id} type="button" onClick={() => setFounderFilter(selected ? '' : founder._id)} className={`rounded-3xl border bg-card p-5 text-left hover:bg-tint ${selected ? 'border-black' : 'border-line'}`}>
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-secondary">Personal account</p>
-                    <Badge tone="lime">Personal</Badge>
-                  </div>
-                  <p className="mt-2 text-lg font-semibold">{founder.fullName}</p>
-                  <p className="mt-3 text-2xl font-semibold"><Money paise={founder.finance?.personalExpensesPaise || 0} /></p>
-                  <p className="mt-2 text-xs text-secondary">Kept separate from Company Cash</p>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {kind === 'expense' && <PersonalSummaryCards totals={personalTotals} />}
         {kind === 'income' && (
           <Card>
             <p className="text-xs uppercase tracking-wider text-secondary">Total income</p>
@@ -215,6 +204,14 @@ function MoneyRegister({ kind, title, text, endpoint, categories }: { kind: 'inc
                     {fromPayment ? <Link to="/payments" className="text-sm font-semibold">Payment</Link> : (
                       <>
                         {can(`${kind === 'income' ? 'income' : 'expenses'}.manage`) && <Button variant="quiet" onClick={() => openEdit(row)}>Edit</Button>}
+                        {kind === 'income' && can('income.manage') && <Button variant="quiet" onClick={async () => {
+                          if (!window.confirm(`Delete ${row.title}? This amount is taken back out of the bank.`)) return;
+                          try {
+                            await api.post(`/income/${row._id}/void`, { reason: 'Deleted income' });
+                            toast('Income deleted');
+                            load();
+                          } catch (err) { setError(errorMessage(err)); }
+                        }}>Delete</Button>}
                       </>
                     )}
                   </div></Td>
@@ -259,7 +256,7 @@ function MoneyRegister({ kind, title, text, endpoint, categories }: { kind: 'inc
                   })}
                 </div>
                 <input type="hidden" {...form.register('paidByFounderId', { validate: (value) => form.getValues('paidByType') !== 'founder' || Boolean(value) || 'Choose Sajeel, Shakeeb, or Ismail' })} />
-                {form.watch('paidByType') === 'founder' && <p className="text-sm text-secondary">This stays on the selected personal account. Company Cash does not change.</p>}
+                {form.watch('paidByType') === 'founder' && <p className="text-sm text-secondary">Paid from their own pocket. Company Cash does not change. The company owes them this amount.</p>}
               </div>
             )}
             {kind === 'expense' && form.watch('paidByType') !== 'founder' && (

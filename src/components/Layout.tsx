@@ -18,6 +18,7 @@ const items = [
   { to: '/payments', label: 'Client Payments', icon: HandCoins, perm: 'payments.view' },
   { to: '/income', label: 'Income', icon: CircleDollarSign, perm: 'income.view' },
   { to: '/expenses', label: 'Expenses', icon: Receipt, perm: 'expenses.view' },
+  { to: '/personal', label: 'Personal account', icon: Banknote, perm: 'founderFinance.view' },
   { to: '/banks', label: 'Bank Accounts', icon: Wallet, perm: 'banks.view' },
   // { to: '/ledger', label: 'Ledger & Accounting', icon: Banknote, perm: 'ledger.view' },
   // { to: '/founder-finance', label: 'Founder Finance', icon: ChartNoAxesCombined, perm: 'founderFinance.view' },

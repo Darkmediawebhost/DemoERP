@@ -27,51 +27,56 @@ function clientDate(row: Row) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(row.createdAt));
 }
 
-export function ClientsPage() {
+function clientFormValues(row?: Row | null) {
+  return {
+    name: row?.name || '',
+    companyName: row?.companyName || '',
+    phone: row?.phone || '',
+    email: row?.email || '',
+    service: row?.service || '',
+    serviceType: row?.serviceType || 'monthly_subscription',
+    serviceTypeOther: row?.serviceTypeOther || '',
+    monthlyAmount: row?.monthlyAmountPaise ? (Number(row.monthlyAmountPaise) / 100).toFixed(2) : '',
+    status: row?.status || 'active',
+  };
+}
+
+function clientFormPayload(values: Record<string, string>, editing: boolean) {
+  return {
+    name: values.name,
+    companyName: values.companyName,
+    phone: values.phone,
+    email: values.email,
+    service: values.service,
+    serviceType: values.serviceType,
+    serviceTypeOther: values.serviceType === 'other' ? values.serviceTypeOther : '',
+    monthlyAmount: values.serviceType === 'monthly_subscription' ? (values.monthlyAmount || '0') : '0',
+    status: values.status || 'active',
+    ...(editing ? {} : { startDate: todayKey() }),
+  };
+}
+
+async function removeClient(row: Row) {
+  const confirmed = window.confirm(`Delete ${row.name}? Projects and tasks for this client are removed too.`);
+  if (!confirmed) return false;
+  await api.delete(`/clients/${row._id}`);
+  return true;
+}
+
+function ClientEditor({ client, onClose, onSaved }: { client: Row | null; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
-  const [rows, setRows] = useState<Row[]>([]);
-  const [query, setQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
-  const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
-  const form = useForm<Record<string, string>>({ defaultValues: { status: 'active', serviceType: 'monthly_subscription', paymentDueDay: '1' } });
+  const form = useForm<Record<string, string>>({ defaultValues: clientFormValues(client) });
   const serviceType = form.watch('serviceType');
-  const load = () => api.get('/clients', { params: { q: query || undefined, serviceType: typeFilter || undefined } }).then((response) => setRows(response.data.data)).catch((err) => setError(errorMessage(err)));
-  useEffect(() => { load(); }, [query, typeFilter]);
   return (
-    <div>
-      <PageHeader title="Clients" text="Name the client, the service, and how it is billed. Other service types can be typed in." action={<Button onClick={() => { setError(''); setOpen(true); }}>Add client</Button>} />
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row">
-        <TextInput className="w-full sm:max-w-sm" placeholder="Search clients or services" value={query} onChange={(event) => setQuery(event.target.value)} />
-        <Select className="w-full sm:max-w-[220px]" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-          <option value="">All service types</option>
-          {SERVICE_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-        </Select>
-      </div>
-      {error && !open && <ErrorText>{error}</ErrorText>}
-      {rows.length === 0 ? <Empty title="No clients" text="Add a client with a service and a service type." /> : (
-        <Table><thead><tr><Th>Client name</Th><Th>Date</Th><Th>Service</Th><Th>Service type</Th><Th>Status</Th><Th>Monthly</Th></tr></thead><tbody>
-          {rows.map((row) => <tr key={row._id} className="hover:bg-tint"><Td><Link className="font-semibold" to={`/clients/${row._id}`}>{row.name}</Link><p className="text-xs text-secondary">{row.companyName}</p></Td><Td>{clientDate(row) || '—'}</Td><Td>{row.service || '—'}</Td><Td>{serviceTypeLabel(row)}</Td><Td><Badge tone={statusTone(row.status)}>{row.status}</Badge></Td><Td>{row.serviceType === 'monthly_subscription' ? <Money paise={row.monthlyAmountPaise} /> : '—'}</Td></tr>)}
-        </tbody></Table>
-      )}
-      {open && <Modal title="New client" onClose={() => setOpen(false)}><form className="grid gap-3" onSubmit={form.handleSubmit(async (values) => {
+    <Modal title={client ? `Edit ${client.name}` : 'New client'} onClose={onClose}>
+      <form className="grid gap-3" onSubmit={form.handleSubmit(async (values) => {
         try {
-          await api.post('/clients', {
-            name: values.name,
-            companyName: values.companyName,
-            phone: values.phone,
-            email: values.email,
-            service: values.service,
-            serviceType: values.serviceType,
-            serviceTypeOther: values.serviceType === 'other' ? values.serviceTypeOther : '',
-            monthlyAmount: values.serviceType === 'monthly_subscription' ? (values.monthlyAmount || '0') : '0',
-            status: 'active',
-            startDate: todayKey(),
-          });
-          toast('Client added');
-          form.reset({ status: 'active', serviceType: 'monthly_subscription', paymentDueDay: '1' });
-          setOpen(false);
-          load();
+          const payload = clientFormPayload(values, Boolean(client));
+          if (client) await api.patch(`/clients/${client._id}`, payload);
+          else await api.post('/clients', payload);
+          toast(client ? 'Client updated' : 'Client added');
+          onSaved();
         } catch (err) { setError(errorMessage(err)); }
       })}>
         <Field label="Client name"><TextInput placeholder="Client name" {...form.register('name', { required: true })} /></Field>
@@ -88,28 +93,102 @@ export function ClientsPage() {
           <Field label="Phone"><TextInput {...form.register('phone')} /></Field>
         </div>
         <Field label="Email"><TextInput type="email" {...form.register('email')} /></Field>
+        {client && (
+          <Field label="Status">
+            <Select {...form.register('status')}>
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+              <option value="completed">Completed</option>
+              <option value="archived">Archived</option>
+            </Select>
+          </Field>
+        )}
         {error && <ErrorText>{error}</ErrorText>}
-        <Button type="submit">Save client</Button>
-      </form></Modal>}
+        <Button type="submit">{client ? 'Save changes' : 'Save client'}</Button>
+      </form>
+    </Modal>
+  );
+}
+
+export function ClientsPage() {
+  const toast = useToast();
+  const [rows, setRows] = useState<Row[]>([]);
+  const [query, setQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [editing, setEditing] = useState<Row | null | undefined>(undefined);
+  const [error, setError] = useState('');
+  const load = () => api.get('/clients', { params: { q: query || undefined, serviceType: typeFilter || undefined } }).then((response) => setRows(response.data.data)).catch((err) => setError(errorMessage(err)));
+  useEffect(() => { load(); }, [query, typeFilter]);
+  return (
+    <div>
+      <PageHeader title="Clients" text="Name the client, the service, and how it is billed. Other service types can be typed in." action={<Button onClick={() => { setError(''); setEditing(null); }}>Add client</Button>} />
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row">
+        <TextInput className="w-full sm:max-w-sm" placeholder="Search clients or services" value={query} onChange={(event) => setQuery(event.target.value)} />
+        <Select className="w-full sm:max-w-[220px]" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+          <option value="">All service types</option>
+          {SERVICE_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </Select>
+      </div>
+      {error && editing === undefined && <ErrorText>{error}</ErrorText>}
+      {rows.length === 0 ? <Empty title="No clients" text="Add a client with a service and a service type." /> : (
+        <Table>
+          <thead><tr><Th>Client name</Th><Th>Date</Th><Th>Service</Th><Th>Service type</Th><Th>Status</Th><Th>Monthly</Th><Th /></tr></thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row._id} className="hover:bg-tint">
+                <Td><Link className="font-semibold" to={`/clients/${row._id}`}>{row.name}</Link><p className="text-xs text-secondary">{row.companyName}</p></Td>
+                <Td>{clientDate(row) || '—'}</Td>
+                <Td>{row.service || '—'}</Td>
+                <Td>{serviceTypeLabel(row)}</Td>
+                <Td><Badge tone={statusTone(row.status)}>{row.status}</Badge></Td>
+                <Td>{row.serviceType === 'monthly_subscription' ? <Money paise={row.monthlyAmountPaise} /> : '—'}</Td>
+                <Td>
+                  <span className="flex justify-end gap-1">
+                    <Button variant="quiet" type="button" onClick={() => { setError(''); setEditing(row); }}>Edit</Button>
+                    <Button variant="quiet" type="button" onClick={async () => { try { if (await removeClient(row)) { toast('Client deleted'); load(); } } catch (err) { setError(errorMessage(err)); } }}>Delete</Button>
+                  </span>
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+      {editing !== undefined && <ClientEditor client={editing} onClose={() => setEditing(undefined)} onSaved={() => { setEditing(undefined); load(); }} />}
     </div>
   );
 }
 
 export function ClientDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const toast = useToast();
   const [data, setData] = useState<Row | null>(null);
-  useEffect(() => { api.get(`/clients/${id}`).then((response) => setData(response.data)); }, [id]);
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState('');
+  const load = () => api.get(`/clients/${id}`).then((response) => setData(response.data));
+  useEffect(() => { load(); }, [id]);
   if (!data) return <Spinner />;
   const client = data.data;
   return (
     <div className="space-y-4">
-      <PageHeader title={client.name} text={[clientDate(client) ? `Added ${clientDate(client)}` : '', client.service, serviceTypeLabel(client), client.companyName, client.email, client.phone].filter(Boolean).join(' · ')} />
+      <PageHeader
+        title={client.name}
+        text={[clientDate(client) ? `Added ${clientDate(client)}` : '', client.service, serviceTypeLabel(client), client.companyName, client.email, client.phone].filter(Boolean).join(' · ')}
+        action={(
+          <>
+            <Button variant="ghost" type="button" onClick={() => setEditing(true)}>Edit</Button>
+            <Button variant="danger" type="button" onClick={async () => { try { if (await removeClient(client)) { toast('Client deleted'); navigate('/clients'); } } catch (err) { setError(errorMessage(err)); } }}>Delete</Button>
+          </>
+        )}
+      />
+      {error && <ErrorText>{error}</ErrorText>}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card><h2 className="mb-2 font-semibold">Projects</h2>{(data.projects || []).map((row: Row) => <p key={row._id}>{row.name} · {row.status}</p>)}{!data.projects?.length && <p className="text-sm text-secondary">No projects.</p>}</Card>
         <Card><h2 className="mb-2 font-semibold">Payments</h2>{(data.payments || []).map((row: Row) => <p key={row._id}>{row.periodKey} · {row.status} · <Money paise={row.invoiceAmountPaise - row.amountReceivedPaise} /></p>)}{!data.payments?.length && <p className="text-sm text-secondary">No schedules.</p>}</Card>
         <Card><h2 className="mb-2 font-semibold">Invoices</h2>{(data.invoices || []).map((row: Row) => <p key={row._id}>{row.number || 'Draft'} · {row.status}</p>)}</Card>
         <Card><h2 className="mb-2 font-semibold">Notes</h2><p className="text-sm text-secondary">{client.internalNotes || 'No internal notes.'}</p></Card>
       </div>
+      {editing && <ClientEditor client={client} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load(); }} />}
     </div>
   );
 }
