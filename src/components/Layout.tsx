@@ -6,7 +6,7 @@ import {
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context';
-import { api } from '@/lib/api';
+import { api, clearSession } from '@/lib/api';
 import { NoteAlarms } from '@/pages/company';
 
 const items = [
@@ -99,7 +99,7 @@ export function Layout() {
               <p className="truncate text-sm font-semibold">{user?.name}</p>
               <p className="text-xs capitalize text-secondary">{user?.role.replaceAll('_', ' ')}</p>
             </div>
-            <button className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-secondary" type="button" aria-label="Sign out" onClick={async () => { await api.post('/auth/logout'); setUser(null); navigate('/login'); }}><X size={16} /></button>
+            <button className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-secondary" type="button" aria-label="Sign out" onClick={async () => { clearSession(); await api.post('/auth/logout').catch(() => undefined); setUser(null); navigate('/login'); }}><X size={16} /></button>
           </header>
           <main className="mx-auto w-full max-w-[1440px] min-w-0 flex-1 px-3 py-4 sm:px-6 sm:py-6" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
             <AnimatePresence mode="wait">

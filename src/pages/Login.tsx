@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, ErrorText } from '@/components/ui';
 import { useAuth } from '@/context';
-import { api, errorMessage } from '@/lib/api';
+import { api, errorMessage, saveSession } from '@/lib/api';
 
 type AuthConfig = { loginEmail: string; google: boolean; googleClientId?: string; otp: boolean };
 
@@ -57,6 +57,7 @@ export function LoginPage() {
       }
       const accessToken = await requestGoogleAccessToken(clientId, email);
       const response = await api.post('/auth/google', { accessToken });
+      saveSession(response.data.token);
       setUser(response.data.data);
       navigate('/');
     } catch (err) {
@@ -92,6 +93,7 @@ export function LoginPage() {
     setError('');
     try {
       const response = await api.post('/auth/otp/verify', { email, code });
+      saveSession(response.data.token);
       setUser(response.data.data);
       navigate('/');
     } catch (err) {
