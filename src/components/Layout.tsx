@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Banknote, Bell, Building2, CalendarDays, ChartNoAxesCombined, CircleDollarSign, FolderKanban,
-  HandCoins, LayoutDashboard, Megaphone, Menu, NotebookPen, Receipt, Search, Settings, StickyNote, Target, Users, Wallet, X,
+  HandCoins, LayoutDashboard, Link2, Megaphone, Menu, NotebookPen, Receipt, Search, Settings, StickyNote, Target, Users, Wallet, X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -16,6 +16,7 @@ const items = [
   { to: '/clients', label: 'Clients', icon: Building2, perm: 'clients.view' },
   { to: '/marketing', label: 'Marketing', icon: Megaphone, perm: 'clients.view' },
   { to: '/projects', label: 'Projects & Tasks', icon: FolderKanban, perm: 'projects.view' },
+  { to: '/works', label: 'Our works', icon: Link2, perm: 'dashboard.view' },
   { to: '/payments', label: 'Client Payments', icon: HandCoins, perm: 'payments.view' },
   { to: '/income', label: 'Income', icon: CircleDollarSign, perm: 'income.view' },
   { to: '/expenses', label: 'Expenses', icon: Receipt, perm: 'expenses.view' },
