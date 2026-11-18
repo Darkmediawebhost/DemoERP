@@ -549,6 +549,7 @@ export function PaymentsPage() {
   const [editFor, setEditFor] = useState<Row | null>(null);
   const [editType, setEditType] = useState('');
   const [editAmount, setEditAmount] = useState('');
+  const [editDate, setEditDate] = useState('');
   const [receiptFor, setReceiptFor] = useState<Row | null>(null);
   const [editingReceipt, setEditingReceipt] = useState<Row | null>(null);
   const [paidNow, setPaidNow] = useState('');
@@ -558,7 +559,7 @@ export function PaymentsPage() {
   const [preset, setPreset] = useState('this_month');
   const [error, setError] = useState('');
   const key = useRef(idempotencyKey());
-  const form = useForm<Record<string, string>>({ defaultValues: { clientId: '', paymentType: '', amount: '' } });
+  const form = useForm<Record<string, string>>({ defaultValues: { clientId: '', paymentType: '', amount: '', dueDate: todayKey() } });
   useEffect(() => { form.register('clientId', { required: true }); }, [form]);
   const load = () => {
     api.get('/payments', { params: { limit: 100 } }).then(async (response) => {
@@ -638,7 +639,7 @@ export function PaymentsPage() {
 
   return (
     <div>
-      <PageHeader title="Client payments" text="The received amount is added to Company Cash, or to the bank you choose, and to Income." action={<Button onClick={() => { setError(''); setOpen(true); }}>Add payment</Button>} />
+      <PageHeader title="Client payments" text="The received amount is added to Company Cash, or to the bank you choose, and to Income." action={<Button onClick={() => { setError(''); form.setValue('dueDate', todayKey()); setOpen(true); }}>Add payment</Button>} />
       <div className="mb-4 flex w-full min-w-0 gap-2 overflow-x-auto pb-1">
         {PRESETS.map(([id, label]) => (
           <button key={id} type="button" onClick={() => setPreset(id)} className={`shrink-0 rounded-full border px-3 py-2 text-sm font-semibold ${preset === id ? 'border-black bg-black text-white' : 'border-line bg-card'}`}>{label}</button>
@@ -666,13 +667,17 @@ export function PaymentsPage() {
             <Td><Money paise={pendingOf(row)} /></Td>
             <Td><Badge tone={row.status === 'paid' ? 'success' : row.status === 'partial' ? 'neutral' : statusTone(row.status)}>{paymentLabel(row.status)}</Badge></Td>
             <Td><div className="flex justify-end gap-1">
-              <Button variant="quiet" onClick={() => { setEditFor(row); setEditType(row.paymentType || ''); setEditAmount(rupeeInput(row.invoiceAmountPaise)); setError(''); }}>Edit</Button>
+              <Button variant="quiet" onClick={() => { setEditFor(row); setEditType(row.paymentType || ''); setEditAmount(rupeeInput(row.invoiceAmountPaise)); setEditDate(paymentDate(row)); setError(''); }}>Edit</Button>
+              <Button variant="quiet" onClick={async () => {
+                if (!window.confirm(`Delete this payment for ${row.clientId?.name || 'this client'}? Any amount already received is taken back out of cash or the bank.`)) return;
+                try { await api.delete(`/payments/${row._id}`); toast('Payment deleted'); load(); } catch (err) { setError(errorMessage(err)); }
+              }}>Delete</Button>
               {row.status !== 'paid' && row.status !== 'void' && <Button variant="quiet" onClick={() => openReceive(row)}>Receive</Button>}
             </div></Td>
           </tr>)}
         </tbody></Table>
       )}
-      {open && !addingClient && <Modal title="Add payment" onClose={() => setOpen(false)}><form className="grid gap-3" onSubmit={form.handleSubmit(async (values) => { try { await api.post('/payments', { clientId: values.clientId, paymentType: values.paymentType, amount: values.amount }); toast('Payment added'); setOpen(false); form.reset(); load(); } catch (err) { setError(errorMessage(err)); } })}>
+      {open && !addingClient && <Modal title="Add payment" onClose={() => setOpen(false)}><form className="grid gap-3" onSubmit={form.handleSubmit(async (values) => { try { await api.post('/payments', { clientId: values.clientId, paymentType: values.paymentType, amount: values.amount, dueDate: values.dueDate }); toast('Payment added'); setOpen(false); form.reset({ clientId: '', paymentType: '', amount: '', dueDate: todayKey() }); load(); } catch (err) { setError(errorMessage(err)); } })}>
         <Field label="Client">
           <Select value={form.watch('clientId') || ''} onChange={(event) => { if (event.target.value === '__add__') { setAddingClient(true); return; } form.setValue('clientId', event.target.value, { shouldValidate: true }); }}>
             <option value="">Select a client</option>
@@ -680,6 +685,7 @@ export function PaymentsPage() {
             <option value="__add__">Add a client</option>
           </Select>
         </Field>
+        <Field label="Date"><TextInput type="date" {...form.register('dueDate', { required: true })} /></Field>
         <Field label="Type"><TextInput placeholder="Monthly, project, advance…" {...form.register('paymentType', { required: true })} /></Field>
         <Field label="Amount (INR)"><TextInput inputMode="decimal" placeholder="30000" {...form.register('amount', { required: true })} /></Field>
         {error && <ErrorText>{error}</ErrorText>}
@@ -690,12 +696,13 @@ export function PaymentsPage() {
         <form className="grid gap-3" onSubmit={async (event) => {
           event.preventDefault();
           try {
-            await api.patch(`/payments/${editFor._id}`, { paymentType: editType, amount: editAmount });
+            await api.patch(`/payments/${editFor._id}`, { paymentType: editType, amount: editAmount, dueDate: editDate });
             toast('Payment updated');
             setEditFor(null);
             load();
           } catch (err) { setError(errorMessage(err)); }
         }}>
+          <Field label="Date"><TextInput type="date" value={editDate} onChange={(event) => setEditDate(event.target.value)} required /></Field>
           <Field label="Type"><TextInput value={editType} onChange={(event) => setEditType(event.target.value)} required /></Field>
           <Field label="Amount (INR)"><TextInput inputMode="decimal" value={editAmount} onChange={(event) => setEditAmount(event.target.value)} required /></Field>
           <p className="text-sm text-secondary">Already received <Money paise={editFor.amountReceivedPaise} />. The amount cannot go below that.</p>
