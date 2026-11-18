@@ -16,7 +16,7 @@ const items = [
   { to: '/clients', label: 'Clients', icon: Building2, perm: 'clients.view' },
   { to: '/marketing', label: 'Marketing', icon: Megaphone, perm: 'clients.view' },
   { to: '/projects', label: 'Projects & Tasks', icon: FolderKanban, perm: 'projects.view' },
-  { to: '/works', label: 'Our works', icon: Link2, perm: 'dashboard.view' },
+  
   { to: '/payments', label: 'Client Payments', icon: HandCoins, perm: 'payments.view' },
   { to: '/income', label: 'Income', icon: CircleDollarSign, perm: 'income.view' },
   { to: '/expenses', label: 'Expenses', icon: Receipt, perm: 'expenses.view' },
@@ -29,6 +29,7 @@ const items = [
   // { to: '/attendance', label: 'Attendance', icon: CalendarDays, perm: 'attendance.view' },
   { to: '/salary', label: 'Salary', icon: Wallet, perm: 'salary.view' },
   // { to: '/calendar', label: 'Calendar', icon: CalendarDays, perm: 'calendar.view' },
+  { to: '/works', label: 'Our works', icon: Link2, perm: 'dashboard.view' },
   { to: '/notes', label: 'Sticky Notes', icon: StickyNote, perm: 'notes.view' },
   { to: '/reports', label: 'Reports & Analytics', icon: ChartNoAxesCombined, perm: 'reports.view' },
   { to: '/notifications', label: 'Notifications', icon: Bell, perm: 'notifications.view' },

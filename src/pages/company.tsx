@@ -488,12 +488,7 @@ export function SettingsPage() {
         <h2 className="mb-3 font-semibold">Your theme</h2>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">{(['light', 'dark', 'system'] as const).map((theme) => <Button key={theme} className="w-full" variant="ghost" onClick={async () => { applyTheme(theme); await api.patch('/auth/me', { theme }); toast('Theme saved'); refresh(); }}>{theme}</Button>)}</div>
       </Card>
-      {can('users.manage') && <Card><h2 className="mb-3 font-semibold">Access</h2>{users.map((member) => <div key={member.id} className="mb-4 border-b border-line pb-3"><p className="font-semibold">{member.name} · {member.role}</p><div className="mt-2 flex flex-wrap gap-2">{PERMISSIONS.map((permission) => <label key={permission} className="text-xs"><input type="checkbox" disabled={member.role === 'master_admin'} defaultChecked={member.role === 'master_admin' || member.permissions?.includes(permission) || member.permissions?.includes('*')} onChange={async (event) => {
-        if (member.role === 'master_admin') return;
-        const next = new Set(member.permissions?.includes('*') ? PERMISSIONS : member.permissions || []);
-        if (event.target.checked) next.add(permission); else next.delete(permission);
-        await api.patch(`/auth/users/${member.id}`, { permissions: [...next] });
-      }} /> {permission}</label>)}</div></div>)}</Card>}
+      
     </div>
   );
 }

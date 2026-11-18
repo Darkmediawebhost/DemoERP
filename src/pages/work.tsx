@@ -251,7 +251,7 @@ export function ProjectsPage() {
   const [clientFilter, setClientFilter] = useState('all');
   const [quickFilter, setQuickFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [openProject, setOpenProject] = useState(false);
+  const [projectModal, setProjectModal] = useState<Row | 'new' | null>(null);
   const [composer, setComposer] = useState<string | null>(null);
   const [addProjectId, setAddProjectId] = useState('');
   const [draft, setDraft] = useState('');
@@ -259,10 +259,16 @@ export function ProjectsPage() {
   const [over, setOver] = useState('');
   const [error, setError] = useState('');
   const form = useForm<Record<string, string>>({ defaultValues: { status: 'Planning', priority: 'normal' } });
-  const load = () => Promise.all([api.get('/projects'), api.get('/tasks'), api.get('/clients')]).then(([projectRes, taskRes, clientRes]) => {
+  const load = () => Promise.all([api.get('/projects'), api.get('/tasks'), api.get('/clients', { params: { limit: 100 } })]).then(async ([projectRes, taskRes, clientRes]) => {
     setProjects(projectRes.data.data);
     setTasks(taskRes.data.data);
-    setClients(clientRes.data.data);
+    let clientRows = clientRes.data.data as Row[];
+    const pages = Number(clientRes.data.meta?.pages || 1);
+    if (pages > 1) {
+      const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, index) => api.get('/clients', { params: { limit: 100, page: index + 2 } })));
+      clientRows = clientRows.concat(...rest.map((item) => item.data.data));
+    }
+    setClients(clientRows);
   }).catch((err) => setError(errorMessage(err)));
   useEffect(() => { load(); }, []);
 
@@ -278,6 +284,24 @@ export function ProjectsPage() {
   });
   const selectedProject = projects.find((item) => item._id === projectFilter);
   const doneCount = board.filter((task) => task.status === 'Completed').length;
+
+  function openNewProject() {
+    form.reset({ status: 'Planning', name: '', clientId: '', description: '', dueDate: '' });
+    setError('');
+    setProjectModal('new');
+  }
+
+  function openEditProject(project: Row) {
+    form.reset({
+      clientId: String(project.clientId?._id || project.clientId || ''),
+      name: project.name || '',
+      status: project.status || 'Planning',
+      dueDate: project.dueDate || '',
+      description: project.description || '',
+    });
+    setError('');
+    setProjectModal(project);
+  }
 
   function openComposer(status: string) {
     setComposer(status);
@@ -333,8 +357,8 @@ export function ProjectsPage() {
 
   return (
     <div>
-      <PageHeader title="Projects" text="Pick a project, then move cards across To do, In progress, and Done. Drag a card, or use the move buttons." action={<Button onClick={() => { setError(''); setOpenProject(true); }}>New project</Button>} />
-      {error && !openProject && !active && !composer && <div className="mb-4"><ErrorText>{error}</ErrorText></div>}
+      <PageHeader title="Projects" text="Pick a project, then move cards across To do, In progress, and Done. Drag a card, or use the move list." action={<Button onClick={openNewProject}>New project</Button>} />
+      {error && !projectModal && !active && !composer && <div className="mb-4"><ErrorText>{error}</ErrorText></div>}
       {projects.length === 0 ? <Empty title="No projects yet" text="Create a project for a client, then add tasks in the columns." /> : (
         <div className="lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:items-start lg:gap-4">
           <aside className="mb-4 lg:sticky lg:top-4 lg:mb-0">
@@ -366,7 +390,10 @@ export function ProjectsPage() {
                     <h2 className="truncate text-lg font-semibold">{selectedProject.name}</h2>
                     <p className="truncate text-sm text-secondary">{selectedProject.clientId?.name} · {selectedProject.status}</p>
                   </div>
-                  <p className="text-sm font-semibold">{selectedProject.progress || 0}%</p>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <p className="text-sm font-semibold">{selectedProject.progress || 0}%</p>
+                    <Button type="button" variant="ghost" className="w-auto" onClick={() => openEditProject(selectedProject)}>Edit</Button>
+                  </div>
                 </div>
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg">
                   <div className="h-full rounded-full bg-black" style={{ width: `${selectedProject.progress || 0}%` }} />
@@ -413,7 +440,7 @@ export function ProjectsPage() {
                           key={task._id}
                           draggable
                           onDragStart={(event) => { skipClick.current = true; event.dataTransfer.setData('text/plain', task._id); event.dataTransfer.effectAllowed = 'move'; }}
-                          onDragEnd={() => setOver('')}
+                          onDragEnd={() => { setOver(''); window.setTimeout(() => { skipClick.current = false; }, 0); }}
                           onClick={() => { if (skipClick.current) { skipClick.current = false; return; } setActive(task); }}
                           className="cursor-grab rounded-2xl border border-line bg-card p-3 shadow-sm active:cursor-grabbing"
                         >
@@ -427,11 +454,15 @@ export function ProjectsPage() {
                             <span className={task.priority === 'high' ? 'font-semibold text-ink' : ''}>{task.priority === 'high' ? 'High' : task.priority === 'low' ? 'Low' : 'Normal'}</span>
                             <span className={task.dueDate && task.dueDate < todayKey() && task.status !== 'Completed' ? 'font-semibold text-danger' : ''}>{task.dueDate || 'No date'}</span>
                           </div>
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {BOARD.filter((item) => item.id !== column.id).map((item) => (
-                              <button key={item.id} type="button" className="min-h-11 rounded-full border border-line bg-bg px-3 py-2 text-xs font-semibold" onClick={(event) => { event.stopPropagation(); moveTask(task._id, item.id); }}>Move to {item.label}</button>
-                            ))}
-                          </div>
+                          <select
+                            aria-label={`Move ${task.title}`}
+                            className="mt-2 w-full rounded-xl border border-line bg-bg px-2 py-2 text-xs font-semibold"
+                            value={column.id}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => { event.stopPropagation(); moveTask(task._id, event.target.value); }}
+                          >
+                            {BOARD.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                          </select>
                         </article>
                       ))}
                     </div>
@@ -459,14 +490,15 @@ export function ProjectsPage() {
           </div>
         </div>
       )}
-      {openProject && <Modal title="New project" onClose={() => setOpenProject(false)}><form className="grid gap-3" onSubmit={form.handleSubmit(async (values) => { try { await api.post('/projects', values); toast('Project created'); form.reset({ status: 'Planning', name: '', clientId: '', description: '', dueDate: '' }); setOpenProject(false); setError(''); load(); } catch (err) { setError(errorMessage(err)); } })}>
+      {projectModal && <Modal title={projectModal === 'new' ? 'New project' : 'Edit project'} onClose={() => setProjectModal(null)}><form className="grid gap-3" onSubmit={form.handleSubmit(async (values) => { try { if (projectModal === 'new') { const response = await api.post('/projects', values); setProjectFilter(response.data.data._id); toast('Project created'); } else { await api.patch(`/projects/${projectModal._id}`, values); toast('Project updated'); } form.reset({ status: 'Planning', name: '', clientId: '', description: '', dueDate: '' }); setProjectModal(null); setError(''); load(); } catch (err) { setError(errorMessage(err)); } })}>
         <Field label="Client"><Select {...form.register('clientId', { required: true })}><option value="">Select a client</option>{clients.map((client) => <option key={client._id} value={client._id}>{client.name}</option>)}</Select></Field>
         <Field label="Project name"><TextInput placeholder="Website redesign" {...form.register('name', { required: true })} /></Field>
         <Field label="Status"><Select {...form.register('status')}>{PROJECT_STATUSES.map((status) => <option key={status}>{status}</option>)}</Select></Field>
         <Field label="Due"><TextInput type="date" {...form.register('dueDate')} /></Field>
         <Field label="Description"><TextArea {...form.register('description')} /></Field>
         {error && <ErrorText>{error}</ErrorText>}
-        <Button type="submit">Create project</Button>
+        <Button type="submit">{projectModal === 'new' ? 'Create project' : 'Save project'}</Button>
+        {projectModal !== 'new' && <button type="button" className="text-sm font-semibold text-danger" onClick={async () => { try { await api.delete(`/projects/${projectModal._id}`); if (projectFilter === projectModal._id) setProjectFilter('all'); setProjectModal(null); toast('Project removed'); load(); } catch (err) { setError(errorMessage(err)); } }}>Delete project</button>}
       </form></Modal>}
       {active && <Modal title="Task" onClose={() => setActive(null)}><form className="grid gap-3" onSubmit={saveTask}>
         <p className="text-sm text-secondary">{taskClientName(active, projects)} · {projectOf(active, projects)?.name}</p>
