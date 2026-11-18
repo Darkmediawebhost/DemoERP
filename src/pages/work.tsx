@@ -63,7 +63,7 @@ async function removeClient(row: Row) {
   return true;
 }
 
-function ClientEditor({ client, onClose, onSaved }: { client: Row | null; onClose: () => void; onSaved: () => void }) {
+function ClientEditor({ client, onClose, onSaved }: { client: Row | null; onClose: () => void; onSaved: (saved?: Row) => void }) {
   const toast = useToast();
   const [error, setError] = useState('');
   const form = useForm<Record<string, string>>({ defaultValues: clientFormValues(client) });
@@ -512,6 +512,7 @@ export function PaymentsPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [clients, setClients] = useState<Row[]>([]);
   const [banks, setBanks] = useState<Row[]>([]);
+  const [addingClient, setAddingClient] = useState(false);
   const [open, setOpen] = useState(false);
   const [editFor, setEditFor] = useState<Row | null>(null);
   const [editType, setEditType] = useState('');
@@ -525,7 +526,7 @@ export function PaymentsPage() {
   const [preset, setPreset] = useState('this_month');
   const [error, setError] = useState('');
   const key = useRef(idempotencyKey());
-  const form = useForm<Record<string, string>>();
+  useEffect(() => { form.register('clientId', { required: true }); }, [form]);
   const load = () => {
     api.get('/payments', { params: { limit: 100 } }).then(async (response) => {
       let data = response.data.data as Row[];
@@ -538,7 +539,8 @@ export function PaymentsPage() {
     }).catch((err) => setError(errorMessage(err)));
     api.get('/banks').then((response) => setBanks(response.data.data)).catch(() => undefined);
   };
-  useEffect(() => { load(); api.get('/clients').then((r) => setClients(r.data.data)); }, []);
+  const loadClients = () => api.get('/clients', { params: { limit: 100 } }).then((response) => setClients(response.data.data));
+  useEffect(() => { load(); loadClients(); }, []);
 
   const transferBanks = banks.filter((bank) => bank.accountType !== 'cash' && bank.status !== 'inactive');
   const range = periodRange(preset);
@@ -637,13 +639,20 @@ export function PaymentsPage() {
           </tr>)}
         </tbody></Table>
       )}
-      {open && <Modal title="Add payment" onClose={() => setOpen(false)}><form className="grid gap-3" onSubmit={form.handleSubmit(async (values) => { try { await api.post('/payments', { clientId: values.clientId, paymentType: values.paymentType, amount: values.amount }); toast('Payment added'); setOpen(false); form.reset(); load(); } catch (err) { setError(errorMessage(err)); } })}>
-        <Field label="Client"><Select {...form.register('clientId', { required: true })}><option value="">Select a client</option>{clients.map((client) => <option key={client._id} value={client._id}>{client.name}</option>)}</Select></Field>
+      {open && !addingClient && <Modal title="Add payment" onClose={() => setOpen(false)}><form className="grid gap-3" onSubmit={form.handleSubmit(async (values) => { try { await api.post('/payments', { clientId: values.clientId, paymentType: values.paymentType, amount: values.amount }); toast('Payment added'); setOpen(false); form.reset(); load(); } catch (err) { setError(errorMessage(err)); } })}>
+        <Field label="Client">
+          <Select value={form.watch('clientId') || ''} onChange={(event) => { if (event.target.value === '__add__') { setAddingClient(true); return; } form.setValue('clientId', event.target.value, { shouldValidate: true }); }}>
+            <option value="">Select a client</option>
+            {clients.map((client) => <option key={client._id} value={client._id}>{client.name}</option>)}
+            <option value="__add__">Add a client</option>
+          </Select>
+        </Field>
         <Field label="Type"><TextInput placeholder="Monthly, project, advance…" {...form.register('paymentType', { required: true })} /></Field>
         <Field label="Amount (INR)"><TextInput inputMode="decimal" placeholder="30000" {...form.register('amount', { required: true })} /></Field>
         {error && <ErrorText>{error}</ErrorText>}
         <Button type="submit">Save</Button>
       </form></Modal>}
+      {addingClient && <ClientEditor client={null} onClose={() => setAddingClient(false)} onSaved={(saved) => { setAddingClient(false); if (saved?._id) { setClients((current) => [...current.filter((client) => client._id !== saved._id), saved].sort((a, b) => String(a.name).localeCompare(String(b.name)))); form.setValue('clientId', saved._id, { shouldValidate: true }); } else loadClients(); }} />}
       {editFor && <Modal title={`Edit ${editFor.clientId?.name || 'payment'}`} onClose={() => setEditFor(null)}>
         <form className="grid gap-3" onSubmit={async (event) => {
           event.preventDefault();

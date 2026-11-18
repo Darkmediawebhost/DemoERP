@@ -49,6 +49,7 @@ export function DashboardPage() {
   const to = params.get('to') || '';
   const [data, setData] = useState<DashboardData | null>(null);
   const [banks, setBanks] = useState<BankAccountRow[] | null>(null);
+  const [targetPeriods, setTargetPeriods] = useState<Array<{ id: string; label: string; targetPaise: number; amountPaise: number }>>([]);
   const [error, setError] = useState('');
   const query = rangeQuery(preset, from, to);
 
@@ -56,6 +57,7 @@ export function DashboardPage() {
     const request = from && to ? { from, to } : { preset };
     api.get('/dashboard', { params: request }).then((response) => { setData(response.data.data); setError(''); }).catch((err) => setError(errorMessage(err)));
     api.get('/banks').then((response) => setBanks(listedBanks((response.data.data || []) as BankAccountRow[]))).catch(() => setBanks(null));
+    api.get('/targets').then((response) => setTargetPeriods(response.data.data?.periods || [])).catch(() => setTargetPeriods([]));
   }, [preset, from, to]);
 
   function pickPreset(id: string) {
@@ -89,16 +91,16 @@ export function DashboardPage() {
   const stats = data.stats || {};
   const bankTotalPaise = (banks || []).reduce((sum, bank) => sum + Number(bank.currentBalancePaise || 0), 0);
   const cards = [
-    { id: 'income', label: 'Total income', value: stats.incomePaise, hint: data.range.label, money: true },
+    { id: 'income', label: 'Total Income Generated', value: stats.incomePaise, hint: data.range.label, money: true },
     { id: 'expenses', label: 'Total expenses', value: stats.expensePaise, hint: data.range.label, money: true },
     { id: 'profit', label: 'Net profit', value: stats.netProfitPaise, hint: growthLabel(data.growthBps), money: true },
     { id: 'banks', label: 'Bank balance', value: banks ? bankTotalPaise : stats.bankBalancePaise, hint: banks ? `${banks.length} ${banks.length === 1 ? 'bank' : 'banks'}` : 'Banks', money: true },
-    { id: 'cash', label: 'Cash balance', value: stats.cashBalancePaise, hint: 'Current', money: true },
-    { id: 'payments', label: 'Pending payments', value: stats.pendingPaymentsPaise, hint: `${stats.pendingPaymentCount || 0} open`, money: true },
+    // { id: 'cash', label: 'Cash balance', value: stats.cashBalancePaise, hint: 'Current', money: true },
+    { id: 'payments', label: 'Receivable Payments', value: stats.pendingPaymentsPaise, hint: `${stats.pendingPaymentCount || 0} open`, money: true },
     { id: 'clients', label: 'Clients', value: stats.clientCount, hint: 'Active', money: false },
     { id: 'projects', label: 'Projects', value: stats.activeProjects, hint: 'In motion', money: false },
-    { id: 'capital', label: 'Co-founder capital', value: stats.founderCapitalPaise, hint: 'Ledger balance', money: true },
-    { id: 'revenue', label: 'Revenue', value: stats.monthlyRevenuePaise, hint: data.range.label, money: true },
+    // { id: 'capital', label: 'Co-founder capital', value: stats.founderCapitalPaise, hint: 'Ledger balance', money: true },
+    // { id: 'revenue', label: 'Revenue', value: stats.monthlyRevenuePaise, hint: data.range.label, money: true },
   ];
 
   return (
@@ -127,6 +129,22 @@ export function DashboardPage() {
             <p className="mt-1 text-xs text-muted">{card.hint}</p>
           </Link>
         ))}
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {targetPeriods.map((period) => {
+          const left = Math.max(0, Number(period.targetPaise || 0) - Number(period.amountPaise || 0));
+          const hint = period.targetPaise ? (left > 0 ? `${inr(left)} left` : 'Target reached') : 'No target set';
+          return (
+            <Link key={period.id} to="/targets" className="group rounded-3xl border border-line bg-card p-4 shadow-card transition hover:border-black hover:bg-tint dark:hover:border-white">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-secondary">{period.label} target</p>
+                <ArrowUpRight className="text-muted transition group-hover:text-ink" size={14} />
+              </div>
+              <p className="mt-2 text-lg font-semibold tracking-tight sm:text-2xl"><AnimatedRupees paise={Number(period.amountPaise || 0)} /></p>
+              <p className="mt-1 text-xs text-muted">{hint}{period.targetPaise ? ` of ${inr(period.targetPaise)}` : ''}</p>
+            </Link>
+          );
+        })}
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
         <Card><ChartTitle title="Revenue analytics" to={`/dashboard/income?${query}`} /><RevenueChart data={data.revenueAnalytics || []} /></Card>

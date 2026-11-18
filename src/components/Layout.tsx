@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Banknote, Bell, Building2, CalendarDays, ChartNoAxesCombined, CircleDollarSign, FolderKanban,
-  HandCoins, LayoutDashboard, Megaphone, Menu, NotebookPen, Receipt, Search, Settings, StickyNote, Users, Wallet, X,
+  HandCoins, LayoutDashboard, Megaphone, Menu, NotebookPen, Receipt, Search, Settings, StickyNote, Target, Users, Wallet, X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -11,6 +11,7 @@ import { NoteAlarms } from '@/pages/company';
 
 const items = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, perm: 'dashboard.view' },
+  { to: '/targets', label: 'Targets', icon: Target, perm: 'dashboard.view' },
   // { to: '/founders', label: 'Co-Founder Management', icon: Users, perm: 'founders.view' },
   { to: '/clients', label: 'Clients', icon: Building2, perm: 'clients.view' },
   { to: '/marketing', label: 'Marketing', icon: Megaphone, perm: 'clients.view' },

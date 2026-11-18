@@ -9,6 +9,7 @@ import { LoginPage } from '@/pages/Login';
 import { BankDetailPage, BanksPage, ExpensesPage, FounderDetailPage, FounderFinancePage, FoundersPage, IncomePage, LedgerDetailPage, LedgerPage } from '@/pages/records';
 import { MarketingPage } from '@/pages/marketing';
 import { PersonalPage } from '@/pages/personal';
+import { TargetsPage } from '@/pages/Targets';
 import { ClientDetailPage, ClientsPage, InvoiceDetailPage, InvoicesPage, PaymentsPage, ProjectsPage } from '@/pages/work';
 
 function Guard({ children, permission }: { children: ReactNode; permission?: string }) {
@@ -25,7 +26,7 @@ export function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<Guard><Layout /></Guard>}>
         <Route path="/" element={<Guard permission="dashboard.view"><DashboardPage /></Guard>} />
-        <Route path="/dashboard/:metric" element={<Guard permission="dashboard.view"><DashboardDetailPage /></Guard>} />
+        <Route path="/targets" element={<Guard permission="dashboard.view"><TargetsPage /></Guard>} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/founders" element={<Guard permission="founders.view"><FoundersPage /></Guard>} />
         <Route path="/founders/:id" element={<Guard permission="founders.view"><FounderDetailPage /></Guard>} />
