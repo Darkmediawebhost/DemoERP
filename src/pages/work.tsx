@@ -526,6 +526,7 @@ export function PaymentsPage() {
   const [preset, setPreset] = useState('this_month');
   const [error, setError] = useState('');
   const key = useRef(idempotencyKey());
+  const form = useForm<Record<string, string>>({ defaultValues: { clientId: '', paymentType: '', amount: '' } });
   useEffect(() => { form.register('clientId', { required: true }); }, [form]);
   const load = () => {
     api.get('/payments', { params: { limit: 100 } }).then(async (response) => {
