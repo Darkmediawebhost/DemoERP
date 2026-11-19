@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { DateField } from '@/components/DateField';
 import { Button, Empty, ErrorText, Field, Modal, PageHeader, Select, TextArea, TextInput } from '@/components/ui';
-import { todayKey } from '@/lib/format';
+import { PRESETS, periodRange, todayKey } from '@/lib/format';
 
 type Pitch = {
   id: string;
@@ -63,6 +64,9 @@ const blank = { clientName: '', phone: '', email: '', company: '', pitch: '', st
 export function MarketingPage() {
   const [rows, setRows] = useState<Pitch[]>([]);
   const [filter, setFilter] = useState('');
+  const [preset, setPreset] = useState('this_month');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Pitch | null>(null);
@@ -114,7 +118,9 @@ export function MarketingPage() {
   }
 
   const query = search.trim().toLowerCase();
-  const visible = rows.filter((row) => {
+  const range = from && to ? { from, to } : periodRange(preset);
+  const inPeriod = rows.filter((row) => row.date && row.date >= range.from && row.date <= range.to);
+  const visible = inPeriod.filter((row) => {
     if (filter && row.status !== filter) return false;
     if (!query) return true;
     return [row.clientName, row.phone, row.company, row.pitch, row.email].join(' ').toLowerCase().includes(query);
@@ -125,11 +131,18 @@ export function MarketingPage() {
       <PageHeader title="Marketing" text="See who you pitched, then change the status from the dropdown." action={<Button onClick={openNew}>New pitch</Button>} />
       {rows.length > 0 && (
         <div className="grid gap-3">
+          <div className="flex w-full min-w-0 gap-2 overflow-x-auto pb-1">
+            {PRESETS.map(([id, label]) => (
+              <button key={id} type="button" onClick={() => { setPreset(id); setFrom(''); setTo(''); }} className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-semibold ${preset === id && !(from && to) ? 'border-black bg-black text-white' : 'border-line bg-card'}`}>{label}</button>
+            ))}
+            <DateField className="h-9 w-[9.5rem] shrink-0 rounded-full border border-line bg-card px-3 text-xs" placeholder="From" value={from} onChange={(event) => setFrom(event.target.value)} />
+            <DateField className="h-9 w-[9.5rem] shrink-0 rounded-full border border-line bg-card px-3 text-xs" placeholder="To" value={to} onChange={(event) => setTo(event.target.value)} />
+          </div>
           <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
-            <button type="button" onClick={() => setFilter('')} className={`min-h-11 shrink-0 rounded-full border px-3 text-sm font-semibold ${filter === '' ? 'border-black bg-black text-white' : 'border-line bg-card'}`}>All · {rows.length}</button>
+            <button type="button" onClick={() => setFilter('')} className={`min-h-11 shrink-0 rounded-full border px-3 text-sm font-semibold ${filter === '' ? 'border-black bg-black text-white' : 'border-line bg-card'}`}>All · {inPeriod.length}</button>
             {STATUSES.map((item) => (
               <button key={item.value} type="button" onClick={() => setFilter(filter === item.value ? '' : item.value)} className={`inline-flex min-h-11 shrink-0 items-center rounded-full border px-3 text-sm font-semibold ${filter === item.value ? `${item.banner} border-transparent ring-2 ring-black ring-offset-2 ring-offset-bg` : 'border-line bg-card'}`}>
-                {item.short} · {rows.filter((row) => row.status === item.value).length}
+                {item.short} · {inPeriod.filter((row) => row.status === item.value).length}
               </button>
             ))}
           </div>
@@ -138,7 +151,7 @@ export function MarketingPage() {
       )}
       {visible.length === 0 ? (
         <div className="mt-4">
-          <Empty title={rows.length === 0 ? 'No pitches yet' : 'Nothing matches'} text={rows.length === 0 ? 'Add the client name, phone, and what you pitched.' : 'Try another status or clear the search.'} />
+          <Empty title={rows.length === 0 ? 'No pitches yet' : 'Nothing in this period'} text={rows.length === 0 ? 'Add the client name, phone, and what you pitched.' : 'Try another period, status, or clear the search.'} />
         </div>
       ) : (
         <div className="mt-4 grid items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-3">

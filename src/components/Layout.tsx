@@ -18,7 +18,7 @@ const items = [
   { to: '/projects', label: 'Projects & Tasks', icon: FolderKanban, perm: 'projects.view' },
   
   { to: '/payments', label: 'Client Payments', icon: HandCoins, perm: 'payments.view' },
-  { to: '/income', label: 'Income', icon: CircleDollarSign, perm: 'income.view' },
+  // { to: '/income', label: 'Income', icon: CircleDollarSign, perm: 'income.view' },
   { to: '/expenses', label: 'Expenses', icon: Receipt, perm: 'expenses.view' },
   { to: '/personal', label: 'Personal account', icon: Banknote, perm: 'founderFinance.view' },
   { to: '/banks', label: 'Bank Accounts', icon: Wallet, perm: 'banks.view' },

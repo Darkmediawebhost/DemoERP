@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
+import { DateField } from '@/components/DateField';
 import { Badge, Button, Card, Empty, ErrorText, Field, Modal, Money, PageHeader, Select, Spinner, Table, Td, TextArea, TextInput, Th } from '@/components/ui';
 import { useToast } from '@/context';
 import { api, errorMessage, idempotencyKey } from '@/lib/api';
@@ -73,10 +74,9 @@ function ClientEditor({ client, onClose, onSaved }: { client: Row | null; onClos
       <form className="grid gap-3" onSubmit={form.handleSubmit(async (values) => {
         try {
           const payload = clientFormPayload(values, Boolean(client));
-          if (client) await api.patch(`/clients/${client._id}`, payload);
-          else await api.post('/clients', payload);
+          const response = client ? await api.patch(`/clients/${client._id}`, payload) : await api.post('/clients', payload);
           toast(client ? 'Client updated' : 'Client added');
-          onSaved();
+          onSaved(response.data.data);
         } catch (err) { setError(errorMessage(err)); }
       })}>
         <Field label="Client name"><TextInput placeholder="Client name" {...form.register('name', { required: true })} /></Field>
@@ -115,26 +115,53 @@ export function ClientsPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [preset, setPreset] = useState('this_month');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [editing, setEditing] = useState<Row | null | undefined>(undefined);
   const [error, setError] = useState('');
-  const load = () => api.get('/clients', { params: { q: query || undefined, serviceType: typeFilter || undefined } }).then((response) => setRows(response.data.data)).catch((err) => setError(errorMessage(err)));
+  const load = () => {
+    api.get('/clients', { params: { q: query || undefined, serviceType: typeFilter || undefined, limit: 100 } }).then(async (response) => {
+      let data = response.data.data as Row[];
+      const pages = Number(response.data.meta?.pages || 1);
+      if (pages > 1) {
+        const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, index) => api.get('/clients', { params: { q: query || undefined, serviceType: typeFilter || undefined, limit: 100, page: index + 2 } })));
+        data = data.concat(...rest.map((item) => item.data.data));
+      }
+      setRows(data);
+    }).catch((err) => setError(errorMessage(err)));
+  };
   useEffect(() => { load(); }, [query, typeFilter]);
+  const range = from && to ? { from, to } : periodRange(preset);
+  const visible = rows.filter((row) => {
+    const date = clientDate(row);
+    return Boolean(date && date >= range.from && date <= range.to);
+  });
   return (
     <div>
       <PageHeader title="Clients" text="Name the client, the service, and how it is billed. Other service types can be typed in." action={<Button onClick={() => { setError(''); setEditing(null); }}>Add client</Button>} />
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row">
-        <TextInput className="w-full sm:max-w-sm" placeholder="Search clients or services" value={query} onChange={(event) => setQuery(event.target.value)} />
-        <Select className="w-full sm:max-w-[220px]" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-          <option value="">All service types</option>
-          {SERVICE_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-        </Select>
+      <div className="mb-4 space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <TextInput className="w-full sm:max-w-sm" placeholder="Search clients or services" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <Select className="w-full sm:max-w-[220px]" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+            <option value="">All service types</option>
+            {SERVICE_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </Select>
+        </div>
+        <div className="flex w-full min-w-0 gap-2 overflow-x-auto pb-1">
+          {PRESETS.map(([id, label]) => (
+            <button key={id} type="button" onClick={() => { setPreset(id); setFrom(''); setTo(''); }} className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-semibold ${preset === id && !(from && to) ? 'border-black bg-black text-white' : 'border-line bg-card'}`}>{label}</button>
+          ))}
+          <DateField className="h-9 w-[9.5rem] shrink-0 rounded-full border border-line bg-card px-3 text-xs" placeholder="From" value={from} onChange={(event) => setFrom(event.target.value)} />
+          <DateField className="h-9 w-[9.5rem] shrink-0 rounded-full border border-line bg-card px-3 text-xs" placeholder="To" value={to} onChange={(event) => setTo(event.target.value)} />
+        </div>
       </div>
       {error && editing === undefined && <ErrorText>{error}</ErrorText>}
-      {rows.length === 0 ? <Empty title="No clients" text="Add a client with a service and a service type." /> : (
+      {visible.length === 0 ? <Empty title="No clients in this period" text="Try another period, or add a client." /> : (
         <Table>
           <thead><tr><Th>Client name</Th><Th>Date</Th><Th>Service</Th><Th>Service type</Th><Th>Status</Th><Th>Monthly</Th><Th /></tr></thead>
           <tbody>
-            {rows.map((row) => (
+            {visible.map((row) => (
               <tr key={row._id} className="hover:bg-tint">
                 <Td><Link className="font-semibold" to={`/clients/${row._id}`}>{row.name}</Link><p className="text-xs text-secondary">{row.companyName}</p></Td>
                 <Td>{clientDate(row) || '—'}</Td>
@@ -748,6 +775,13 @@ export function PaymentsPage() {
   );
 }
 
+function sentWhen(value?: string) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date);
+}
+
 function billDate(value?: string) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return '';
   const [year, month, day] = value.split('-');
@@ -819,7 +853,7 @@ function typedDueDate(value: string) {
   return iso;
 }
 
-function InvoiceEditModal({ invoice, items, onClose, onSaved }: { invoice: Row; items?: Row[]; onClose: () => void; onSaved: () => void }) {
+function InvoiceEditModal({ invoice, items, onClose, onSaved }: { invoice: Row; items?: Row[]; onClose: () => void; onSaved: (justSent?: boolean) => void }) {
   const nextId = useRef(1);
   const lineFrom = (item?: Row) => {
     const id = nextId.current;
@@ -874,7 +908,7 @@ function InvoiceEditModal({ invoice, items, onClose, onSaved }: { invoice: Row; 
               });
             }
             if (!draft && currentDraft) await api.post(`/invoices/${invoice._id}/issue`);
-            onSaved();
+            onSaved(!draft && currentDraft);
           } catch (err) { setError(errorMessage(err)); }
         }}>
           <Field label="Status">
@@ -935,7 +969,7 @@ function InvoiceSheet({ invoice, client, items }: { invoice: Row; client: Row; i
             <p className="text-4xl font-light tracking-wide sm:text-5xl">INVOICE</p>
             <p className="mt-1 text-sm text-white/80">No. {invoice.number || 'Draft'}</p>
           </div>
-          <p className="shrink-0 text-right text-sm leading-5">Date:<br />{billDate(invoice.dateKey)}</p>
+          <p className="shrink-0 text-right text-sm leading-5">Date:<br />{billDate(invoice.dateKey)}{invoice.sentAt ? <><br />Sent:<br />{sentWhen(invoice.sentAt)}</> : null}</p>
         </div>
       </div>
       <div className="relative z-10 -mt-14 grid gap-3 px-3 sm:-mt-16 sm:grid-cols-2 sm:gap-4 sm:px-5">
@@ -1005,6 +1039,7 @@ export function InvoicesPage() {
   const toast = useToast();
   const [rows, setRows] = useState<Row[]>([]);
   const [open, setOpen] = useState(false);
+  const [addingClient, setAddingClient] = useState(false);
   const [preset, setPreset] = useState('this_month');
   const [statusFilter, setStatusFilter] = useState('');
   const [statusFor, setStatusFor] = useState<Row | null>(null);
@@ -1094,10 +1129,10 @@ export function InvoicesPage() {
       {error && !open && !statusFor && <ErrorText>{error}</ErrorText>}
       {visible.length === 0 ? <Empty title={statusFilter === 'draft' ? 'No draft invoices' : statusFilter === 'sent' ? 'No sent invoices' : 'No invoices in this period'} text="Try another status or period, or generate an invoice." /> : (
       <Table><thead><tr><Th>Number</Th><Th>Client</Th><Th>Total</Th><Th>Balance</Th><Th>Status</Th><Th></Th></tr></thead><tbody>
-        {visible.map((row) => <tr key={row._id}><Td><Link to={`/invoices/${row._id}`}>{row.number || 'Draft'}</Link></Td><Td>{row.clientId?.name}</Td><Td><Money paise={row.totalPaise} /></Td><Td><Money paise={row.totalPaise - row.amountPaidPaise} /></Td><Td><Badge tone={statusTone(row.status)}>{titleCase(row.status)}</Badge></Td><Td><span className="flex justify-end gap-1"><Button variant="quiet" onClick={() => { setStatusFor(row); setError(''); }}>Edit</Button><Button variant="quiet" onClick={async () => { try { await removeInvoice(row); toast('Invoice deleted'); load(); } catch (err) { setError(errorMessage(err)); } }}>Delete</Button></span></Td></tr>)}
+        {visible.map((row) => <tr key={row._id}><Td><Link to={`/invoices/${row._id}`}>{row.number || 'Draft'}</Link></Td><Td>{row.clientId?.name}</Td><Td><Money paise={row.totalPaise} /></Td><Td><Money paise={row.totalPaise - row.amountPaidPaise} /></Td><Td><Badge tone={statusTone(row.status)}>{titleCase(row.status)}</Badge>{row.sentAt && <p className="mt-1 text-xs text-secondary">{sentWhen(row.sentAt)}</p>}</Td><Td><span className="flex justify-end gap-1"><Button variant="quiet" onClick={() => { setStatusFor(row); setError(''); }}>Edit</Button><Button variant="quiet" onClick={async () => { try { await removeInvoice(row); toast('Invoice deleted'); load(); } catch (err) { setError(errorMessage(err)); } }}>Delete</Button></span></Td></tr>)}
       </tbody></Table>
       )}
-      {open && <Modal title="Generate invoice" onClose={() => setOpen(false)}>
+      {open && !addingClient && <Modal title="Generate invoice" onClose={() => { setOpen(false); setAddingClient(false); }}>
         <form className="grid gap-3" onSubmit={async (event) => {
           event.preventDefault();
           const items = lines.filter((line) => line.description.trim() && Number(line.price) > 0).map((line) => ({ description: line.description.trim(), quantity: '1', rate: line.price }));
@@ -1120,9 +1155,10 @@ export function InvoicesPage() {
           } catch (err) { setError(errorMessage(err)); }
         }}>
           <Field label="Client">
-            <Select value={clientId} onChange={(event) => { setClientId(event.target.value); setLines([]); setWorkId(''); }}>
+            <Select value={clientId} onChange={(event) => { if (event.target.value === '__add__') { setAddingClient(true); return; } setClientId(event.target.value); setLines([]); setWorkId(''); }}>
               <option value="">Select a client</option>
               {clients.map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}
+              <option value="__add__">Add a client</option>
             </Select>
           </Field>
           <Field label="This month’s work">
@@ -1160,7 +1196,8 @@ export function InvoicesPage() {
           <Button type="submit">Generate invoice</Button>
         </form>
       </Modal>}
-      {statusFor && <InvoiceEditModal invoice={statusFor} onClose={() => setStatusFor(null)} onSaved={() => { setStatusFor(null); load(); }} />}
+      {addingClient && <ClientEditor client={null} onClose={() => setAddingClient(false)} onSaved={(saved) => { setAddingClient(false); if (saved?._id) { setClients((current) => [...current.filter((item) => item._id !== saved._id), saved].sort((a, b) => String(a.name).localeCompare(String(b.name)))); setClientId(saved._id); setLines([]); setWorkId(''); } }} />}
+      {statusFor && <InvoiceEditModal invoice={statusFor} onClose={() => setStatusFor(null)} onSaved={(justSent) => { const id = statusFor._id; setStatusFor(null); load(); if (justSent) navigate(`/invoices/${id}`); }} />}
     </div>
   );
 }
@@ -1185,7 +1222,7 @@ export function InvoiceDetailPage() {
   const items = data.items || [];
   return (
     <div>
-      <PageHeader title={invoice.number || 'Draft invoice'} text={client.name} action={
+      <PageHeader title={invoice.number || 'Draft invoice'} text={invoice.sentAt ? `${client.name} · Sent ${sentWhen(invoice.sentAt)}` : client.name} action={
         <>
           <Button variant="ghost" onClick={() => navigate('/invoices')}>Back</Button>
           <Button variant="ghost" onClick={() => setEditing(true)}>Edit</Button>
