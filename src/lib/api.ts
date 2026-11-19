@@ -1,10 +1,18 @@
 import axios from 'axios';
 
-const apiOrigin = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const configuredOrigin = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 const tokenKey = 'dm_session';
 
+function apiOrigin() {
+  if (configuredOrigin) return configuredOrigin;
+  if (typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app')) {
+    return 'https://demoerp-backend.onrender.com';
+  }
+  return '';
+}
+
 export const api = axios.create({
-  baseURL: `${apiOrigin}/api`,
+  baseURL: `${apiOrigin()}/api`,
   withCredentials: true,
 });
 
@@ -26,6 +34,7 @@ export function errorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
     const message = error.response?.data?.error;
     if (typeof message === 'string' && message.trim()) return message;
+    if (!error.response) return 'The server is not responding. Wait a moment and try again.';
   }
   return 'Something went wrong. Try again.';
 }
