@@ -62,8 +62,8 @@ export function Layout() {
       <div className="flex min-h-screen">
         <aside className={`fixed inset-y-0 left-0 z-40 flex w-[min(86vw,280px)] flex-col bg-black text-white transition-all lg:w-[272px] ${collapsed ? 'lg:w-[84px]' : ''} ${open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
           <div className="flex items-center gap-3 px-5 py-5">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-lime text-xs font-bold text-black">DM</span>
-            {!collapsed && <div><p className="text-sm font-semibold tracking-[0.16em]">DARK MEDIA</p><p className="text-[11px] text-neutral-400">Company ERP</p></div>}
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-lime text-xs font-bold text-black">DE</span>
+            {!collapsed && <p className="text-sm font-semibold tracking-[0.16em]">DEMO ERP</p>}
           </div>
           <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
             {visible.map((item) => (
@@ -84,6 +84,7 @@ export function Layout() {
               </NavLink>
             ))}
           </nav>
+          {!collapsed && <a className="mx-3 mb-1 flex min-h-11 items-center rounded-xl px-3 text-sm text-neutral-300 hover:bg-white/5" href="/download/demo-erp.apk">Android APK</a>}
           <button className="m-3 hidden rounded-xl border border-darkline px-3 py-2 text-xs text-neutral-300 lg:block" type="button" onClick={() => setCollapsed((value) => !value)}>{collapsed ? 'Expand' : 'Collapse'}</button>
         </aside>
         {open && <button className="fixed inset-0 z-30 bg-black/50 lg:hidden" aria-label="Close menu" onClick={() => setOpen(false)} />}
