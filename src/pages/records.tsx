@@ -212,6 +212,17 @@ function MoneyRegister({ kind, title, text, endpoint, categories }: { kind: 'inc
                             load();
                           } catch (err) { setError(errorMessage(err)); }
                         }}>Delete</Button>}
+                        {kind === 'expense' && can('expenses.manage') && <Button variant="quiet" onClick={async () => {
+                          const note = personalName
+                            ? `Delete ${row.title}? The company will no longer owe ${personalName} this amount.`
+                            : `Delete ${row.title}? This amount is put back into Company Cash.`;
+                          if (!window.confirm(note)) return;
+                          try {
+                            await api.post(`/expenses/${row._id}/void`, { reason: 'Deleted expense' });
+                            toast('Expense deleted');
+                            load();
+                          } catch (err) { setError(errorMessage(err)); }
+                        }}>Delete</Button>}
                       </>
                     )}
                   </div></Td>

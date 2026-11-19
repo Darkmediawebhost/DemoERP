@@ -27,6 +27,7 @@ export function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<Guard><Layout /></Guard>}>
         <Route path="/" element={<Guard permission="dashboard.view"><DashboardPage /></Guard>} />
+        <Route path="/dashboard/:metric" element={<Guard permission="dashboard.view"><DashboardDetailPage /></Guard>} />
         <Route path="/targets" element={<Guard permission="dashboard.view"><TargetsPage /></Guard>} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/founders" element={<Guard permission="founders.view"><FoundersPage /></Guard>} />
