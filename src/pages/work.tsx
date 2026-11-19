@@ -605,10 +605,7 @@ export function PaymentsPage() {
 
   const transferBanks = banks.filter((bank) => bank.accountType !== 'cash' && bank.status !== 'inactive');
   const range = periodRange(preset);
-  const periodRows = rows.filter((row) => {
-    const date = paymentDate(row);
-    return Boolean(date && date >= range.from && date <= range.to);
-  });
+  const periodRows = rows.filter((row) => inPeriod(paymentDate(row), range) || inPeriod(dayKey(row.sentAt), range));
   const visible = periodRows.filter((row) => {
     if (view === 'open') return row.status === 'pending' || row.status === 'partial' || row.status === 'overdue';
     if (view === 'paid') return row.status === 'paid';
@@ -684,10 +681,11 @@ export function PaymentsPage() {
       </div>
       {error && !receiptFor && !editFor && !open && <div className="mb-4"><ErrorText>{error}</ErrorText></div>}
       {visible.length === 0 ? <Empty title="No payments in this period" text="Try another period, or add what the client owes." /> : (
-        <Table><thead><tr><Th>Client</Th><Th>Date</Th><Th>Type</Th><Th>Amount</Th><Th>Received</Th><Th>Pending</Th><Th>Status</Th><Th></Th></tr></thead><tbody>
+        <Table><thead><tr><Th>Client</Th><Th>Date</Th><Th>Sent</Th><Th>Type</Th><Th>Amount</Th><Th>Received</Th><Th>Pending</Th><Th>Status</Th><Th></Th></tr></thead><tbody>
           {visible.map((row) => <tr key={row._id}>
             <Td>{row.clientId?.name}</Td>
             <Td>{billDate(paymentDate(row)) || '—'}</Td>
+            <Td>{row.sentAt ? sentWhen(row.sentAt) : '—'}</Td>
             <Td>{row.paymentType}</Td>
             <Td><Money paise={row.invoiceAmountPaise} /></Td>
             <Td><Money paise={row.amountReceivedPaise} /></Td>
@@ -773,6 +771,17 @@ export function PaymentsPage() {
       </Modal>}
     </div>
   );
+}
+
+function dayKey(value?: string) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+}
+
+function inPeriod(date: string, range: { from: string; to: string }) {
+  return Boolean(date && date >= range.from && date <= range.to);
 }
 
 function sentWhen(value?: string) {
@@ -1099,8 +1108,10 @@ export function InvoicesPage() {
   const range = periodRange(preset);
   const visible = rows.filter((row) => {
     const date = invoiceDate(row);
-    if (!date || date < range.from || date > range.to) return false;
-    if (statusFilter && row.status !== statusFilter) return false;
+    if (!inPeriod(date, range) && !inPeriod(dayKey(row.sentAt), range)) return false;
+    if (statusFilter === 'sent') {
+      if (row.status !== 'sent' && !(row.sentAt && row.status === 'overdue')) return false;
+    } else if (statusFilter && row.status !== statusFilter) return false;
     return true;
   });
 
@@ -1129,7 +1140,7 @@ export function InvoicesPage() {
       {error && !open && !statusFor && <ErrorText>{error}</ErrorText>}
       {visible.length === 0 ? <Empty title={statusFilter === 'draft' ? 'No draft invoices' : statusFilter === 'sent' ? 'No sent invoices' : 'No invoices in this period'} text="Try another status or period, or generate an invoice." /> : (
       <Table><thead><tr><Th>Number</Th><Th>Client</Th><Th>Total</Th><Th>Balance</Th><Th>Status</Th><Th></Th></tr></thead><tbody>
-        {visible.map((row) => <tr key={row._id}><Td><Link to={`/invoices/${row._id}`}>{row.number || 'Draft'}</Link></Td><Td>{row.clientId?.name}</Td><Td><Money paise={row.totalPaise} /></Td><Td><Money paise={row.totalPaise - row.amountPaidPaise} /></Td><Td><Badge tone={statusTone(row.status)}>{titleCase(row.status)}</Badge>{row.sentAt && <p className="mt-1 text-xs text-secondary">{sentWhen(row.sentAt)}</p>}</Td><Td><span className="flex justify-end gap-1"><Button variant="quiet" onClick={() => { setStatusFor(row); setError(''); }}>Edit</Button><Button variant="quiet" onClick={async () => { try { await removeInvoice(row); toast('Invoice deleted'); load(); } catch (err) { setError(errorMessage(err)); } }}>Delete</Button></span></Td></tr>)}
+        {visible.map((row) => <tr key={row._id}><Td><Link to={`/invoices/${row._id}`}>{row.number || 'Draft'}</Link></Td><Td>{row.clientId?.name}</Td><Td><Money paise={row.totalPaise} /></Td><Td><Money paise={row.totalPaise - row.amountPaidPaise} /></Td><Td><Badge tone={statusTone(row.status)}>{titleCase(row.status)}</Badge>{row.sentAt && <p className="mt-1 text-xs text-secondary">Sent {sentWhen(row.sentAt)}</p>}</Td><Td><span className="flex justify-end gap-1"><Button variant="quiet" onClick={() => { setStatusFor(row); setError(''); }}>Edit</Button><Button variant="quiet" onClick={async () => { try { await removeInvoice(row); toast('Invoice deleted'); load(); } catch (err) { setError(errorMessage(err)); } }}>Delete</Button></span></Td></tr>)}
       </tbody></Table>
       )}
       {open && !addingClient && <Modal title="Generate invoice" onClose={() => { setOpen(false); setAddingClient(false); }}>
